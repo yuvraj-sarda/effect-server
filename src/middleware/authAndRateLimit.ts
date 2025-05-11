@@ -3,15 +3,13 @@ import { Effect } from 'effect';
 import {
   redisClient,
   getRateLimit,
-  processRequestWindow
+  calculateRetryAfter
 } from '../services/redis';
 import {
   logRequest,
   validateAuthHeader,
   cleanEndpoint
 } from '../utils/helpers';
-
-export const RATE_LIMIT_WINDOW = 60; // seconds
 
 export const authAndRateLimit: express.RequestHandler = (req, res, next) => {
   const requestDate = new Date();
@@ -44,23 +42,15 @@ export const authAndRateLimit: express.RequestHandler = (req, res, next) => {
       catch: (error) => error as Error
     });
 
-    const windowStartDate = new Date(
-      requestDate.getTime() - RATE_LIMIT_WINDOW * 1000
-    );
-
-    const recentRequestCount = yield* processRequestWindow(
-      requestKey,
-      windowStartDate,
-      true
-    );
-
-    return { rateLimit, recentRequestCount } as const;
+    const retryAfter = yield* calculateRetryAfter(requestKey, requestDate, rateLimit)
+    return retryAfter;
   });
 
   // -------------------- execute program ----------------------------------
   Effect.runPromise(program)
-    .then(({ rateLimit, recentRequestCount }) => {
-      if (recentRequestCount > rateLimit) {
+    .then((retryAfter) => {
+      if (retryAfter > 0) {
+        res.setHeader("Retry-After", retryAfter)
         res.status(429).json({ error: "Too many requests" });
         return;
       }

@@ -2,6 +2,8 @@ import { Effect } from "effect";
 import { RedisClient } from "bun";
 import { cleanEndpoint } from "../utils/helpers";
 
+export const RATE_LIMIT_WINDOW = 60; // seconds
+
 /**
  * Raw Redis client instance. Consumers should prefer the Effect based helpers
  * exported by this module instead of calling the client directly.
@@ -62,43 +64,41 @@ export const getRateLimit = (endpoint: string, token: string) =>
   );
 
 /**
- * Calculates the amount of requests that fall into the given window.
- * Optionally performs cleanup of the stored timestamps to keep Redis tidy.
+ * Calculate how long one must wait before one's requests will be less than the rate limit threshold and thus processed.
  */
-export const processRequestWindow = (
-  requestKey: string,
-  windowStartDate: Date,
-  shouldCleanup: boolean = false
-) =>
-  Effect.gen(function* () {
-    const allRequests: string[] = yield* Effect.tryPromise({
-      try: () =>
-        redisClient.send("LRANGE", [requestKey, "0", "-1"]) as Promise<string[]>,
-      catch: (error) => error as Error
-    });
+export const calculateRetryAfter = (
+		requestKey: string,
+		requestDate: Date,
+		rateLimit: number
+	) => Effect.gen(function* () {
+		const allRequests: string[] = yield* Effect.tryPromise({
+			try: () =>
+				redisClient.send("LRANGE", [requestKey, "0", "-1"]) as Promise<string[]>,
+			catch: (error) => error as Error
+		});
+		// TODO: we need not fetch all the requests; only the first (rateLimit + 1) are needed. Haven't implemented right now because I'm not sure how to limit it on redis.
+		// NOTE: this array is ordered with most recent timestamps first (Redis inserts at front not back)
 
-    const cutoffIndex = allRequests.findIndex(
-      (timestamp: string) => new Date(timestamp) >= windowStartDate
-    );
+		// if we are under the rate limit, early return since one need not wait.
+		if (allRequests.length <= rateLimit) return 0;
 
-    if (shouldCleanup) {
-      if (cutoffIndex === -1) {
-        yield* Effect.tryPromise({
-          try: () => redisClient.del(requestKey),
-          catch: (error) => error as Error
-        });
-      } else if (cutoffIndex > 0) {
-        yield* Effect.tryPromise({
-          try: () =>
-            redisClient.send("LTRIM", [
-              requestKey,
-              cutoffIndex.toString(),
-              "-1"
-            ]),
-          catch: (error) => error as Error
-        });
-      }
-    }
+		// else, calculate exactly which requests were recent
+		const windowStartDate = new Date(
+		  requestDate.getTime() - RATE_LIMIT_WINDOW * 1000
+		);
 
-    return cutoffIndex === -1 ? 0 : allRequests.length - cutoffIndex;
-  });
+		const index = allRequests.findIndex(
+			(requestTimestamp: string) => new Date(requestTimestamp) < windowStartDate
+		);
+		// -1  ⇒  every request is still in the window
+		const numRequestsInWindow = index === -1 ? allRequests.length : index;
+
+		if (numRequestsInWindow <= rateLimit) return 0;
+
+		// too many recent requests, so user must wait
+		const nextAvailableTime = new Date(allRequests[rateLimit - 1]).getTime() + RATE_LIMIT_WINDOW * 1000
+		const retryAfter = nextAvailableTime - requestDate.getTime()
+		return retryAfter
+	});
+
+	// TODO: it might make more sense to store meiliseconds in db, instead of date strings. Saves the time needed to convert.
