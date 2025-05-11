@@ -1,13 +1,21 @@
 import express from 'express';
 import { redisClient, getRateLimit, cleanupOldRequests, getRecentRequestCount } from '../services/redis';
-import { cleanEndpoint } from '../utils/helpers';
+import { logRequest, validateAuthHeader, cleanEndpoint } from '../utils/helpers';
 
 export const RATE_LIMIT_WINDOW = 60;
 
-export const rateLimitMiddleware = async (req: express.Request, res: express.Response, next: express.NextFunction): Promise<void> => {
+export const authAndRateLimit = async (req: express.Request, res: express.Response, next: express.NextFunction): Promise<void> => {
   const requestDate = new Date();
-  const token = req.headers.authorization?.split(' ')[1]!;
+  logRequest(req, requestDate);
   
+  // Authentication
+  const token = validateAuthHeader(req.headers.authorization);
+  if (!token) {
+    res.status(401).json({ error: 'Missing or invalid Authorization header' });
+    return;
+  }
+
+  // Rate Limiting
   const cleanedEndpoint = cleanEndpoint(req.url);
   const rateLimit = await getRateLimit(cleanedEndpoint, token);
   if (!rateLimit) {

@@ -2,8 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import { Effect } from 'effect';
 import { redisClient, setRateLimits } from './services/redis';
-import { authenticate, VALID_BEARER_TOKEN } from './middleware/auth';
-import { rateLimitMiddleware } from './middleware/rateLimit';
+import { authAndRateLimit } from './middleware/authAndRateLimit';
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -18,7 +17,7 @@ app.get('/', (req, res) => {
 });
 
 // Simulated API endpoint with authentication and rate limiting
-app.post('/api/simulate', authenticate, rateLimitMiddleware, (req, res) => {
+app.post('/api/simulate', authAndRateLimit, (req, res) => {
   setTimeout(() => {
     res.json({
       message: 'Request processed successfully',
@@ -33,7 +32,7 @@ const startServer = Effect.try({
   try: async () => {
     // Ensure Redis connection is established
     await redisClient.connect();
-    await setRateLimits('/api/simulate', VALID_BEARER_TOKEN, '3');
+    await setRateLimits('/api/simulate', 'sample.bearer.token.123', '3');
     
     app.listen(port, () => {
       console.log(`Server is running on http://localhost:${port}`);
