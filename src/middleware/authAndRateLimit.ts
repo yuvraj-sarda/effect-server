@@ -24,7 +24,7 @@ export const authAndRateLimit = async (req: express.Request, res: express.Respon
   }
 
   const requestKey = `user-request-${cleanedEndpoint}-${token}`;
-  await redisClient.sadd(requestKey, requestDate.toISOString());
+  await redisClient.send("LPUSH", [requestKey, requestDate.toISOString()]);
 
   const windowStartDate = new Date(requestDate.getTime() - (RATE_LIMIT_WINDOW * 1000));
   await cleanupOldRequests(requestKey, windowStartDate);

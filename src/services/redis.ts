@@ -31,12 +31,16 @@ export const cleanupOldRequests = async (
   requestKey: string,
   windowStartDate: Date
 ): Promise<void> => {
-  const allRequests = await redisClient.smembers(requestKey);
-  for (const timestamp of allRequests) {
-    const requestDate = new Date(timestamp);
-    if (requestDate < windowStartDate) {
-      await redisClient.srem(requestKey, timestamp);
-    }
+  // Get all requests and find the index of the first request within our window
+  const allRequests = await redisClient.send("LRANGE", [requestKey, "0", "-1"]) as string[];
+  const cutoffIndex = allRequests.findIndex((timestamp: string) => new Date(timestamp) >= windowStartDate);
+  
+  if (cutoffIndex === -1) {
+    // If no requests are within window, clear the entire list
+    await redisClient.del(requestKey);
+  } else if (cutoffIndex > 0) {
+    // Keep only requests from cutoffIndex onwards
+    await redisClient.send("LTRIM", [requestKey, cutoffIndex.toString(), "-1"]);
   }
 };
 
@@ -44,6 +48,6 @@ export const getRecentRequestCount = async (
   requestKey: string,
   windowStartDate: Date
 ): Promise<number> => {
-  const allRequests = await redisClient.smembers(requestKey);
-  return allRequests.filter(timestamp => new Date(timestamp) >= windowStartDate).length;
+  const allRequests = await redisClient.send("LRANGE", [requestKey, "0", "-1"]) as string[];
+  return allRequests.filter((timestamp: string) => new Date(timestamp) >= windowStartDate).length;
 };
