@@ -64,41 +64,73 @@ export const getRateLimit = (endpoint: string, token: string) =>
   );
 
 /**
+ * Fetch stored request timestamps for a given key from Redis.
+ *
+ * The timestamps are returned in the order Redis stores them (most recent first).
+ */
+const fetchRequestTimestamps = (requestKey: string) =>
+  Effect.tryPromise({
+    try: () =>
+      redisClient.send("LRANGE", [requestKey, "0", "-1"]) as Promise<
+        string[]
+      >,
+    catch: (error) => error as Error
+  });
+
+/**
+ * Pure function that inspects the provided list of timestamps (ordered newest
+ * first) and determines how long a caller should wait (in milliseconds) until
+ * it drops back under the rate-limit threshold.
+ *
+ * If the caller is already under the threshold the function returns 0.
+ */
+const computeRetryDelay = (
+  timestamps: string[],
+  requestDate: Date,
+  rateLimit: number
+): number => {
+  // If we're already under the limit, we don't need to wait.
+  if (timestamps.length <= rateLimit) return 0;
+
+  // Identify the start of the sliding window we care about.
+  const windowStartDate = new Date(
+    requestDate.getTime() - RATE_LIMIT_WINDOW * 1000
+  );
+
+  // Find the first request that lies *outside* the window. Everything before
+  // that index is still considered "recent".
+  const index = timestamps.findIndex(
+    (ts) => new Date(ts) < windowStartDate
+  );
+
+  // index === -1 means that every stored request still lies inside the window.
+  const numRequestsInWindow = index === -1 ? timestamps.length : index;
+
+  if (numRequestsInWindow <= rateLimit) return 0;
+
+  // Too many recent requests – calculate when the rate-limit will free up.
+  const nextAvailableTime =
+    new Date(timestamps[rateLimit - 1]).getTime() +
+    RATE_LIMIT_WINDOW * 1000;
+
+  return nextAvailableTime - requestDate.getTime();
+};
+
+/**
  * Calculate how long one must wait before one's requests will be less than the rate limit threshold and thus processed.
  */
 export const calculateRetryAfter = (
 		requestKey: string,
 		requestDate: Date,
 		rateLimit: number
-	) => Effect.gen(function* () {
-		const allRequests: string[] = yield* Effect.tryPromise({
-			try: () =>
-				redisClient.send("LRANGE", [requestKey, "0", "-1"]) as Promise<string[]>,
-			catch: (error) => error as Error
-		});
-		// TODO: we need not fetch all the requests; only the first (rateLimit + 1) are needed. Haven't implemented right now because I'm not sure how to limit it on redis.
-		// NOTE: this array is ordered with most recent timestamps first (Redis inserts at front not back)
+	) =>
+  Effect.gen(function* () {
+    const timestamps: string[] = yield* fetchRequestTimestamps(requestKey);
+    // TODO: We need not fetch all requests – fetching just (rateLimit + 1)
+    // would suffice. Redis by default doesn't support an easy slice for the
+    // *front* of a list, so we fetch everything for now.
 
-		// if we are under the rate limit, early return since one need not wait.
-		if (allRequests.length <= rateLimit) return 0;
+    return computeRetryDelay(timestamps, requestDate, rateLimit);
+  });
 
-		// else, calculate exactly which requests were recent
-		const windowStartDate = new Date(
-		  requestDate.getTime() - RATE_LIMIT_WINDOW * 1000
-		);
-
-		const index = allRequests.findIndex(
-			(requestTimestamp: string) => new Date(requestTimestamp) < windowStartDate
-		);
-		// -1  ⇒  every request is still in the window
-		const numRequestsInWindow = index === -1 ? allRequests.length : index;
-
-		if (numRequestsInWindow <= rateLimit) return 0;
-
-		// too many recent requests, so user must wait
-		const nextAvailableTime = new Date(allRequests[rateLimit - 1]).getTime() + RATE_LIMIT_WINDOW * 1000
-		const retryAfter = nextAvailableTime - requestDate.getTime()
-		return retryAfter
-	});
-
-	// TODO: it might make more sense to store meiliseconds in db, instead of date strings. Saves the time needed to convert.
+// TODO: it might make more sense to store meiliseconds in db, instead of date strings. Saves the time needed to convert.
