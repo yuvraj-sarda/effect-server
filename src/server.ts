@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import express from 'express';
 import { Effect } from 'effect';
-import { redisClient, setRateLimit } from './services/redis';
+import { connectRedis, closeRedis, setRateLimit, redisClient } from "./services/redis";
 import { authAndRateLimit } from './middleware/authAndRateLimit';
 
 const app = express();
@@ -27,24 +27,27 @@ app.post('/api/simulate', authAndRateLimit, (req, res) => {
   }, 1000); // 1 second delay
 });
 
-// Start the server using Effect
-const startServer = Effect.try({
-  try: async () => {
-    // Ensure Redis connection is established
-    await redisClient.connect();
-    await setRateLimit('/api/simulate', 'sample.bearer.token.123', '3');
-    
+// Compose boot sequence using Effect
+const startServer = Effect.gen(function* () {
+  // Ensure Redis connection is established
+  yield* connectRedis;
+
+  // Seed a demo rate-limit so the example endpoint can be exercised right
+  yield* setRateLimit("/api/simulate", "sample.bearer.token.123", "3");
+
+  // Start listening
+  yield* Effect.sync(() => {
     app.listen(port, () => {
       console.log(`Server is running on http://localhost:${port}`);
     });
-  },
-  catch: (error) => {
-    console.error('Failed to start server:', error);
-    // Ensure Redis connection is closed on server failure
-    redisClient.close();
-    process.exit(1);
-  }
-});
+  });
+}).pipe(
+  Effect.tapError((error) =>
+    Effect.sync(() => {
+      console.error("Failed to start server:", error);
+    })
+  )
+);
 
 // Handle graceful shutdown
 process.on('SIGTERM', () => {
@@ -54,4 +57,8 @@ process.on('SIGTERM', () => {
 });
 
 // Run the server
-Effect.runPromise(startServer);
+Effect.runPromise(startServer).catch(() => {
+  // If startup fails we make sure Redis is closed and exit the process.
+  Effect.runSync(closeRedis);
+  process.exit(1);
+});
