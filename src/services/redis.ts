@@ -27,27 +27,26 @@ export const getRateLimit = async (endpoint: string, token: string): Promise<num
   return parseInt(rateLimitString);
 };
 
-export const cleanupOldRequests = async (
+export const processRequestWindow = async (
   requestKey: string,
-  windowStartDate: Date
-): Promise<void> => {
-  // Get all requests and find the index of the first request within our window
+  windowStartDate: Date,
+  shouldCleanup: boolean = false
+): Promise<number> => {
+  // Get all requests in a single operation
   const allRequests = await redisClient.send("LRANGE", [requestKey, "0", "-1"]) as string[];
   const cutoffIndex = allRequests.findIndex((timestamp: string) => new Date(timestamp) >= windowStartDate);
   
-  if (cutoffIndex === -1) {
-    // If no requests are within window, clear the entire list
-    await redisClient.del(requestKey);
-  } else if (cutoffIndex > 0) {
-    // Keep only requests from cutoffIndex onwards
-    await redisClient.send("LTRIM", [requestKey, cutoffIndex.toString(), "-1"]);
+  // If cleanup is requested, handle the cleanup operation
+  if (shouldCleanup) {
+    if (cutoffIndex === -1) {
+      // If no requests are within window, clear the entire list
+      await redisClient.del(requestKey);
+    } else if (cutoffIndex > 0) {
+      // Keep only requests from cutoffIndex onwards
+      await redisClient.send("LTRIM", [requestKey, cutoffIndex.toString(), "-1"]);
+    }
   }
-};
 
-export const getRecentRequestCount = async (
-  requestKey: string,
-  windowStartDate: Date
-): Promise<number> => {
-  const allRequests = await redisClient.send("LRANGE", [requestKey, "0", "-1"]) as string[];
-  return allRequests.filter((timestamp: string) => new Date(timestamp) >= windowStartDate).length;
+  // Return the count of requests within the window
+  return cutoffIndex === -1 ? 0 : allRequests.length - cutoffIndex;
 };

@@ -1,5 +1,5 @@
 import express from 'express';
-import { redisClient, getRateLimit, cleanupOldRequests, getRecentRequestCount } from '../services/redis';
+import { redisClient, getRateLimit, processRequestWindow } from '../services/redis';
 import { logRequest, validateAuthHeader, cleanEndpoint } from '../utils/helpers';
 
 export const RATE_LIMIT_WINDOW = 60;
@@ -27,8 +27,7 @@ export const authAndRateLimit = async (req: express.Request, res: express.Respon
   await redisClient.send("LPUSH", [requestKey, requestDate.toISOString()]);
 
   const windowStartDate = new Date(requestDate.getTime() - (RATE_LIMIT_WINDOW * 1000));
-  await cleanupOldRequests(requestKey, windowStartDate);
-  const recentRequestCount = await getRecentRequestCount(requestKey, windowStartDate);
+  const recentRequestCount = await processRequestWindow(requestKey, windowStartDate, true);
 
   if (recentRequestCount > rateLimit) {
     res.status(429).json({ error: "Too many requests" });
