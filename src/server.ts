@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import express from 'express';
 import { Effect } from 'effect';
-import { redisClient, setRateLimits } from './services/redis';
+import { redisClient, setRateLimit } from './services/redis';
 import { authAndRateLimit } from './middleware/authAndRateLimit';
 
 const app = express();
@@ -32,7 +32,7 @@ const startServer = Effect.try({
   try: async () => {
     // Ensure Redis connection is established
     await redisClient.connect();
-    await setRateLimits('/api/simulate', 'sample.bearer.token.123', '3');
+    await setRateLimit('/api/simulate', 'sample.bearer.token.123', '3');
     
     app.listen(port, () => {
       console.log(`Server is running on http://localhost:${port}`);

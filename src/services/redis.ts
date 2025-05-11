@@ -13,10 +13,10 @@ redisClient.onclose = (error) => {
   console.error('Disconnected from Redis server:', error);
 };
 
-export const setRateLimits = async (endpoint: string, token: string, limit: string): Promise<void> => {
+export const setRateLimit = async (endpoint: string, token: string, limit: string): Promise<void> => {
     const cleanUrl = cleanEndpoint(endpoint);
     await redisClient.set(`user-limit-${cleanUrl}-${token}`, limit);
-  }; 
+}; 
 
 export const getRateLimit = async (endpoint: string, token: string): Promise<number | null> => {
   const cleanUrl = cleanEndpoint(endpoint);
