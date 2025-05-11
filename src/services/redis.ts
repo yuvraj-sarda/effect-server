@@ -117,7 +117,7 @@ const computeRetryDelay = (
 };
 
 /**
- * Calculate how long one must wait before one's requests will be less than the rate limit threshold and thus processed.
+ * Calculate how long one must wait (in meilliseconds) before one's requests will be less than the rate limit threshold and thus processed.
  */
 export const calculateRetryAfter = (
 		requestKey: string,

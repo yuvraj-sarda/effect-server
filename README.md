@@ -48,8 +48,3 @@ Features
 
 You can use AI/any tools that you would like to solve this. Feel free to ask us any questions you have — we are here to collaborate with you. If you find yourself stuck at any point, please ask us. When you are finished, you will present a demo of what you have built and walk us through the code you’ve written.
 
-----
-Questions:
-how to encode the user requests in cache -- store a set for each user. each set contains a key 
-JWT how to decode (for now, just normal user)
-convert to Effect syntax
