@@ -4,19 +4,42 @@ import { Effect } from 'effect';
 const app = express();
 const port = process.env.PORT || 3000;
 
+// Hardcoded bearer token for demonstration
+const VALID_BEARER_TOKEN = 'sample-bearer-token-123';
+
 // Middleware to parse JSON bodies
 app.use(express.json());
+
+// Authentication middleware
+const authenticateBearerToken = (req: express.Request, res: express.Response, next: express.NextFunction): void => {
+  const authHeader = req.headers.authorization;
+  
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    res.status(401).json({ error: 'Missing or invalid Authorization header' });
+    return;
+  }
+
+  const token = authHeader.split(' ')[1];
+  if (token !== VALID_BEARER_TOKEN) {
+    res.status(401).json({ error: 'Invalid bearer token' });
+    return;
+  }
+
+  next();
+};
 
 // Health check endpoint
 app.get('/', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Simulated API endpoint
-app.post('/api/simulate', (req, res) => {
+// Simulated API endpoint with authentication
+app.post('/api/simulate', authenticateBearerToken, (req, res) => {
   console.log('Received request:', {
     method: req.method,
     url: req.url,
+    ip: req.ip,
+    headers: req.headers,
     body: req.body,
     timestamp: new Date().toISOString()
   });
