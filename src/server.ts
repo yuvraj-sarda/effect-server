@@ -68,7 +68,7 @@ const startServer = Effect.gen(function* () {
   // Ensure Redis connection is established
   yield* connectRedis;
 
-  // Seed a demo rate-limit so the example endpoint can be exercised right
+  // Seed a sample rate-limit for demonstration purposes
   yield* setRateLimit("/api/simulate", "sample.bearer.token.123", "3");
 
   // Start listening

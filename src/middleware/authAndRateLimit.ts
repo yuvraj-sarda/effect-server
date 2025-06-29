@@ -50,7 +50,7 @@ export const authAndRateLimit: express.RequestHandler = (req, res, next) => {
   Effect.runPromise(program)
     .then((retryAfter) => {
       if (retryAfter > 0) {
-        console.log("User exceeded rate limit: ", token) // Note: if we want, we can easily write this log to a different file to make them easy to review and analyse.
+        console.log("User exceeded rate limit: ", token) // This log can be redirected to a file or external system for easier review and analysis if needed.
         res.setHeader("Retry-After", retryAfter)
         res.status(429).json({ error: "Too many requests" });
         return;

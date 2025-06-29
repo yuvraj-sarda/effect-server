@@ -1,50 +1,52 @@
-## Project Requirements
+# Effect Rate Limiter Server
 
-### Objective
+A robust, efficient, and flexible rate limiter service built with Effect, Express, and Redis. This service acts as a middleware for REST APIs, controlling access based on request frequency for each client. Clients are identified using a secure bearer token, and rate limits are enforced per account.
 
-Your goal is to create a rate limiter using Effect. This service will sit on the edge of a REST API, controlling access based on request frequency for each client. Clients can be identified using a secure method, such as an API key, bearer token, or IP address. The rate limiter should be robust, efficient, and able to enforce multiple levels of limits.
+## Features
 
-### Requirements
+- **Client Identification:**
+  - Identifies clients based on a bearer token header (per-account rate limiting).
+  - Secure handling of credentials.
+- **Multiple Rate Limits:**
+  - Flexible architecture to support different rate limiting strategies.
+- **Persistence:**
+  - Uses Redis for distributed, persistent rate limit tracking (suitable for serverless or multi-server environments).
+- **Configuration:**
+  - Supports different rate limits per user/account role (e.g., free vs. premium users).
+  - Admin endpoint to override rate limits for specific users.
+- **Response Handling:**
+  - Returns HTTP 429 (Too Many Requests) when a client exceeds the rate limit.
+  - Provides a `Retry-After` header to indicate when requests can be retried.
+- **Observability & Logging:**
+  - Logs every incoming request, including method, URL, IP, headers, and timestamp.
+  - Logs rate limit hits and violations, including when a user exceeds their rate limit.
+  - All logs are output to the console, making it easy to monitor system activity and debug issues in real time. This provides clear visibility into how the rate limiter is functioning and when limits are being enforced.
+  - The logging implementation can be easily extended to write to files or external monitoring systems if needed.
 
-Features
+## Getting Started
 
-1. Client Identification:
+1. **Clone the repository:**
+   ```sh
+   git clone https://github.com/yuvraj-sarda/effect-server
+   cd effect-server
+   ```
+2. **Install dependencies:**
+   ```sh
+   bun install
+   ```
+3. **Set up environment variables:**
+   - Create a `.env` file based on the `.env.example` file. 
+4. **Run the server:**
+   ```sh
+   bun run src/server.ts
+   ```
 
-    * Identify clients based on a bearer token header. This will authenticate their account, so the rate limiting will be per account. If you have time, you can also add IP-based rate limiting.
-    * Ensure secure handling of credentials.
+## Usage
 
-1. Multiple Rate Limits:
+- Send POST requests to `/api/simulate` with a valid Bearer token in the `Authorization` header.
+- Use the `/api/set-rate-limit` endpoint to override rate limits for specific users (see code for details).
 
-    * There are multiple strategies you can use for enforcing rate limit levels. Ideally your solution is flexible enough that you can swap in different strategies as needed. You may want to do some research on how rate limiters typically function. Start simple, and then you can increase the complexity if you have time.
-
-1. Persistence:
-
-    * Imagine that we are either in a serverless or multi-server environment, so the rate limit information cannot just be stored in memory. Use some sort of distributed data store to store the information (hint: Redis)
-
-1. Configuration:
-
-    * Allow different rate limits per user/account role (e.g., free users vs. premium users). 
-    * Add an admin endpoint to enable overriding rate limits for a particular user
-
-1. Response Handling:
-
-    * Return 429 Too Many Requests when a client exceeds the rate limit.
-    * Provide a Retry-After header to indicate when they can retry.
-
-1. Observability:
-
-    * We should have some way to see what’s going on in the system. You can choose how to do this, such as logging rate limit hits and violations, or exposing a simple metrics endpoint (e.g. /rate-limit-stats) to track current request counts per client.
-
-1. Frontend/TUI Application:
-
-    * Provide a simple frontend or terminal UI to send requests and view rate limit enforcement in real time.
-    * Display response codes and headers in a user-friendly way.
-
-1. Bonus:
-
-    * Introduce rate limit tiers: if a given rate limit is hit, escalate to a more restrictive tier
-    * Also allow setting different rate limits per endpoint.
-
-
-You can use AI/any tools that you would like to solve this. Feel free to ask us any questions you have — we are here to collaborate with you. If you find yourself stuck at any point, please ask us. When you are finished, you will present a demo of what you have built and walk us through the code you’ve written.
+## Notes
+- This project was built as a demonstration of rate limiting techniques using Effect and Redis. It was also my first exposure to using Bun as the main runtime.
+- Not actively maintained or intended for production use. Feel free to explore or adapt for your own learning or experimentation.
 
